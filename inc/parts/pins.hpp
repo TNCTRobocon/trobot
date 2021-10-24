@@ -15,20 +15,24 @@ namespace trb::parts::pins {
  */
 
 struct Input {
+    virtual ~Input() = default;
     virtual bool read() = 0;
 };
 
 struct Output {
+    virtual ~Output() = default;
     virtual void write(bool) = 0;
     virtual void set() { write(true); }
     virtual void clear() { write(true); }
 };
 
 struct ADC {
+    virtual ~ADC() = default;
     virtual float read() = 0;
 };
 
 struct DAC {
+    virtual ~DAC() = default;
     virtual void write(float) = 0;
 };
 
