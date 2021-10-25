@@ -38,6 +38,28 @@ struct DAC {
 
 using PWM = DAC;
 
+class InvertInput : Input {
+    Input *input;
+
+public:
+    InvertInput(Input *_input) : input(_input) { assert(input); }
+    InvertInput(const InvertInput *) = delete;
+    virtual ~InvertInput() { delete input; }
+    virtual bool read() { return !input->read(); }
+};
+
+class InvertOutput : Output {
+    Output *output;
+
+public:
+    InvertOutput(Output *_output) : output(_output) { assert(output); }
+    InvertOutput(const InvertOutput *) = delete;
+    virtual ~InvertOutput() { delete output; }
+    virtual void write(bool x) { return output->write(!x); }
+    virtual void set() { return output->clear(); }
+    virtual void clear() { return output->set(); }
+};
+
 #ifdef TRB_PSEUDO
 
 /* パソコンで擬似的にGPIOを操作するときに用いるクラス
