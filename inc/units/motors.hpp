@@ -3,14 +3,21 @@
 #define __HEADER_GUARD_TROBOTLIB_UNITS_MD__
 
 #include <cassert>
-
-#include <memory>
+#include <cmath>
 #include <parts/pins.hpp>
 
 namespace trb::units::motors {
-// alias
-using parts::pins::Output;
-using parts::pins::PWM;
+
+/* NOTE:
+ * 内包を当初unique_ptrで実装していたが、テストベンチする際にunique_ptrでは不都合が生じる。そして、
+ * 最終的に実装されるのはマイコンであり、deleteをあまり考慮する必要はない。
+ * オーバーヘッドを防ぐために古典的な生ポインタを用いて実装する。
+ * なお、理想的な実装はC++20のconceptを用いたパターンはであるが、C++20は新しすぎる。また、templateを
+ * 駆使した方法は可読性にかける点から選択していない。
+ */
+
+using PWM = parts::pins::PWM;
+using Output = parts::pins::Output;
 
 struct Motor {
     virtual ~Motor() = default;
@@ -19,54 +26,52 @@ struct Motor {
 };
 
 class PABMotor : public Motor {
-    std::unique_ptr<PWM> p;
-    std::unique_ptr<Output> a, b;
+    PWM *p;
+    Output *a, *b;
 
 public:
-    PABMotor(std::unique_ptr<PWM> _p, std::unique_ptr<Output> _a,
-             std::unique_ptr<Output> _b);
+    PABMotor(PWM *_p, Output *_a, Output *_b) : p(_p), a(_a), b(_b) {
+        assert(p), assert(a), assert(b);
+    }
     PABMotor(const PABMotor &) = delete;
-    PABMotor(PABMotor &&x) = delete;
-    virtual ~PABMotor() = default;
-    virtual void write(float x);
-    virtual void stop();
-};
+    virtual ~PABMotor() { delete p, delete a, delete b; }
+    virtual void write(float x) {
+        p->write(fabs(x));
+        a->write(x > 0), b->write(x < 0);
+    }
 
-class PABMotorBuilder {
-    std::unique_ptr<PWM> p = nullptr;
-    std::unique_ptr<Output> a = nullptr, b = nullptr;
-
-public:
-    PABMotorBuilder() = default;
-    PABMotorBuilder &setP(std::unique_ptr<PWM> _p);
-    PABMotorBuilder &setA(std::unique_ptr<Output> _a);
-    PABMotorBuilder &setB(std::unique_ptr<Output> _b);
-    std::unique_ptr<Motor> build();
+    virtual void stop() {
+        p->write(0);
+        a->write(false), b->write(false);
+    }
 };
 
 class PQMotor : public Motor {
-    std::unique_ptr<PWM> p, q;
+    PWM *p, *q;
 
 public:
-    PQMotor(std::unique_ptr<PWM> _p, std ::unique_ptr<PWM> _q)
-        : p(std::move(_p)), q(std::move(_q)) {
-        assert(p), assert(q);
-    }
+    PQMotor(PWM *_p, PWM *_q) : p(_p), q(_q) { assert(p), assert(q); }
     PQMotor(const PQMotor &) = delete;
-    PQMotor(PQMotor &&x) = delete;
-    virtual ~PQMotor() = default;
-    virtual void write(float x);
+    virtual ~PQMotor() { delete p, delete q; }
+    virtual void write(float x) {
+        if (x > 0) {
+            p->write(fabs(x)), q->write(0);
+        } else {
+            p->write(0), q->write(fabs(x));
+        }
+    }
     virtual void stop();
 };
 
-class PQMotorBuilder {
-    std::unique_ptr<PWM> p = nullptr, q = nullptr;
+class NegMotor : public Motor {
+    Motor *motor;
 
 public:
-    PQMotorBuilder() = default;
-    PQMotorBuilder &setP(std::unique_ptr<PWM> &_p);
-    PQMotorBuilder &setQ(std::unique_ptr<PWM> &_q);
-    std::unique_ptr<Motor> build();
+    NegMotor(Motor *_motor) : motor(_motor) { assert(motor); }
+    NegMotor(const NegMotor &) = delete;
+    virtual ~NegMotor() { delete motor; }
+    virtual void write(float x) { motor->write(-x); }
+    virtual void stop() { motor->stop(); }
 };
 
 #ifdef TRB_PSEUDO
